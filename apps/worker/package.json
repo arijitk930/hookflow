@@ -1,0 +1,21 @@
+{
+  "name": "@hookflow/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "learn:basics": "tsx examples/01-basics.ts",
+    "typecheck": "tsc --noEmit",
+    "learn:peek": "tsx examples/02-peek.ts"
+  },
+  "dependencies": {
+    "@hookflow/queue": "workspace:*",
+    "bullmq": "6.7.8",
+    "ioredis": "^5.11.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3"
+  }
+}

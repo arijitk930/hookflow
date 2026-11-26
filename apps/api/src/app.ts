@@ -10,6 +10,8 @@ import { createEndpointsRouter } from "./routes/endpoints.js";
 import { createEventsRouter } from "./routes/events.js";
 import { createRateLimiter } from "./middleware/rateLimiter.js";
 import type { Resolver } from "./lib/ssrf.js";
+import { enqueueDeliveries } from "./queue.js";
+import type { EnqueueDeliveries } from "./services/events.js";
 import { requireTrustedOrigin } from "./middleware/requireTrustedOrigin.js";
 import { notFoundHandler } from "./middleware/notFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
@@ -23,6 +25,8 @@ export interface AppOptions {
   ingestAuthFailureLimit?: number;
   /** Override DNS resolution for endpoint URL checks (used by tests). */
   resolveHost?: Resolver;
+  /** Override how deliveries are queued (used by tests). */
+  enqueueDeliveries?: EnqueueDeliveries;
 }
 
 export function createApp(options: AppOptions = {}): Express {
@@ -41,6 +45,7 @@ export function createApp(options: AppOptions = {}): Express {
     "/api/v1/events",
     createEventsRouter({
       maxBytes: config.EVENT_MAX_BYTES,
+      enqueueDeliveries: options.enqueueDeliveries ?? enqueueDeliveries,
       authFailureLimiter: createRateLimiter({
         windowMs: 15 * 60 * 1000,
         limit: options.ingestAuthFailureLimit ?? config.INGEST_AUTH_FAILURE_LIMIT,

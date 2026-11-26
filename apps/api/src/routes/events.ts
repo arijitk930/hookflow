@@ -13,7 +13,12 @@ import { findJsonProblem } from "../lib/jsonSafety.js";
 import { AppError } from "../middleware/errorHandler.js";
 import { requireApiKey } from "../middleware/requireApiKey.js";
 import { requireAuth } from "../middleware/requireAuth.js";
-import { getEvent, ingestEvent, listEvents } from "../services/events.js";
+import {
+  getEvent,
+  ingestEvent,
+  listEvents,
+  type EnqueueDeliveries,
+} from "../services/events.js";
 
 const ingestSchema = z
   .object({
@@ -59,6 +64,7 @@ export interface EventsRouterOptions {
   maxBytes: number;
   authFailureLimiter: RequestHandler;
   ingestLimiter: RequestHandler;
+  enqueueDeliveries: EnqueueDeliveries;
 }
 
 export function createEventsRouter(options: EventsRouterOptions): ExpressRouter {
@@ -76,11 +82,11 @@ export function createEventsRouter(options: EventsRouterOptions): ExpressRouter 
       const { type, data } = ingestSchema.parse(req.body);
       const idempotencyKey = idempotencyKeySchema.parse(req.get("idempotency-key"));
 
-      const { event, replayed } = await ingestEvent(req.apiKey!.userId, {
-        type,
-        data,
-        idempotencyKey,
-      });
+      const { event, replayed } = await ingestEvent(
+        req.apiKey!.userId,
+        { type, data, idempotencyKey },
+        options.enqueueDeliveries
+      );
 
       if (replayed) res.set("Idempotent-Replayed", "true");
       const body: ApiSuccess<IngestEventResponse> = { ok: true, data: event };

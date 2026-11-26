@@ -20,6 +20,8 @@ const envSchema = z.object({
   AWS_REGION: z.string().min(1, "AWS_REGION is required"),
   STORAGE_BUCKET: z.string().default("uploads"),
   REDIS_URL: z.string().default("redis://localhost:6380"),
+  // Redis key namespace for the job queue; the worker must use the same value
+  QUEUE_PREFIX: z.string().regex(/^[A-Za-z0-9_-]+$/).default("hookflow"),
   // Dashboard origin allowed to call the API with credentials (cookies)
   // Normalised to scheme://host[:port], the form browsers send in the Origin header
   WEB_ORIGIN: z

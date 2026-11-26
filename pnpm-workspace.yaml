@@ -2,6 +2,7 @@ packages:
   - "apps/*"
   - "packages/*"
 allowBuilds:
+  msgpackr-extract: false
   sharp: false
   unrs-resolver: false
   "@prisma/client": true

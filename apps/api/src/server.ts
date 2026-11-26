@@ -1,8 +1,12 @@
 import { app } from "./app.js";
 import { config } from "./config.js";
 import { prisma } from "@hookflow/db";
+import { closeDeliveryProducer, getDeliveryProducer } from "./queue.js";
 import { closeRedisClient } from "./redis.js";
 import { closeStorageClient } from "./storage.js";
+
+// Connect to the queue now so the first event doesn't find it still connecting
+getDeliveryProducer();
 
 const server = app.listen(config.PORT, () => {
   console.log(`🚀 HookFlow API listening on http://localhost:${config.PORT}`);
@@ -16,6 +20,7 @@ async function shutdown(signal: string) {
     try {
       await prisma.$disconnect();
       console.log("Database connection closed.");
+      await closeDeliveryProducer();
       await closeRedisClient();
       console.log("Redis connection closed.");
       closeStorageClient();

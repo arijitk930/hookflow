@@ -1,11 +1,18 @@
 import { Prisma, prisma } from "@hookflow/db";
+import type { DeliveryRef } from "@hookflow/queue";
 import type {
   EventDetailDto,
   EventSummaryDto,
   IngestEventResponse,
   Page,
 } from "@hookflow/shared";
+import { withTimeout } from "../lib/withTimeout.js";
 import { AppError } from "../middleware/errorHandler.js";
+
+/** Longest an ingestion request waits for the queue. */
+export const ENQUEUE_TIMEOUT_MS = 1000;
+
+export type EnqueueDeliveries = (deliveries: DeliveryRef[]) => Promise<void>;
 
 export interface IngestInput {
   type: string;
@@ -54,10 +61,36 @@ function findByIdempotencyKey(userId: string, idempotencyKey: string) {
 }
 
 /**
- * Persists an event with one PENDING delivery per matching active endpoint.
- * Event and deliveries are written atomically; queueing happens separately.
+ * Best effort. The delivery rows are already committed, so a failure here must
+ * not fail the request: they stay PENDING for recovery to pick up.
  */
-export async function ingestEvent(userId: string, input: IngestInput): Promise<IngestResult> {
+async function queueFirstAttempts(
+  eventId: string,
+  deliveries: { id: string }[],
+  enqueue: EnqueueDeliveries
+): Promise<void> {
+  if (deliveries.length === 0) return;
+  try {
+    const refs = deliveries.map((d) => ({ deliveryId: d.id, attemptNumber: 1 }));
+    await withTimeout(enqueue(refs), ENQUEUE_TIMEOUT_MS);
+  } catch (err) {
+    console.error(
+      `Could not queue ${deliveries.length} deliveries for event ${eventId}: ` +
+        (err instanceof Error ? err.message : "unknown error")
+    );
+  }
+}
+
+/**
+ * Persists an event with one PENDING delivery per matching active endpoint,
+ * then queues them. Event and deliveries are written atomically *before*
+ * queueing, so a job never refers to a row that doesn't exist.
+ */
+export async function ingestEvent(
+  userId: string,
+  input: IngestInput,
+  enqueue: EnqueueDeliveries
+): Promise<IngestResult> {
   const { type, data, idempotencyKey } = input;
 
   if (idempotencyKey) {
@@ -71,9 +104,10 @@ export async function ingestEvent(userId: string, input: IngestInput): Promise<I
   });
 
   const now = new Date();
+  let created;
   try {
     // A nested create runs in a single transaction
-    const created = await prisma.event.create({
+    created = await prisma.event.create({
       data: {
         userId,
         type,
@@ -83,9 +117,8 @@ export async function ingestEvent(userId: string, input: IngestInput): Promise<I
           create: endpoints.map((e) => ({ endpointId: e.id, nextAttemptAt: now })),
         },
       },
-      select: acceptedSelect,
+      select: { ...acceptedSelect, deliveries: { select: { id: true } } },
     });
-    return { event: toAccepted(created), replayed: false };
   } catch (err) {
     // A concurrent request with the same key won the unique constraint: return its event
     if (
@@ -98,6 +131,9 @@ export async function ingestEvent(userId: string, input: IngestInput): Promise<I
     }
     throw err;
   }
+
+  await queueFirstAttempts(created.id, created.deliveries, enqueue);
+  return { event: toAccepted(created), replayed: false };
 }
 
 export async function listEvents(

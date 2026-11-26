@@ -6,7 +6,8 @@ let redisClient: Redis | null = null;
 export function getRedisClient(): Redis {
   if (!redisClient) {
     redisClient = new Redis(config.REDIS_URL, {
-      maxRetriesPerRequest: null,
+      // Fail commands quickly when Redis is unreachable
+      maxRetriesPerRequest: 1,
       enableReadyCheck: true,
       retryStrategy(times) {
         if (config.NODE_ENV === "test") return null;
@@ -27,7 +28,9 @@ export function getRedisClient(): Redis {
 
 export async function closeRedisClient(): Promise<void> {
   if (redisClient) {
-    await redisClient.quit();
+    // quit() would wait for an unreachable server
+    if (redisClient.status === "ready") await redisClient.quit();
+    else redisClient.disconnect();
     redisClient = null;
   }
 }

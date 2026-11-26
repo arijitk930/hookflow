@@ -1,5 +1,6 @@
 import { Router, type Router as ExpressRouter } from "express";
 import { prisma } from "@hookflow/db";
+import { withTimeout } from "../lib/withTimeout.js";
 import { getRedisClient } from "../redis.js";
 import { checkBucket } from "../storage.js";
 import type { ApiSuccess, ApiError } from "@hookflow/shared";
@@ -30,7 +31,8 @@ healthRouter.get("/", async (_req, res) => {
 
   try {
     const redis = getRedisClient();
-    const pingResult = await redis.ping();
+    // Without a limit, ping waits for the connection to come back
+    const pingResult = await withTimeout(redis.ping(), 1000);
     if (pingResult === "PONG") {
       redisStatus = "connected";
     }
