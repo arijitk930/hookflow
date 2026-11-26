@@ -35,6 +35,11 @@ const envSchema = z.object({
   ENCRYPTION_KEY: z
     .string()
     .regex(/^[0-9a-fA-F]{64}$/, "ENCRYPTION_KEY must be 64 hex characters (32 bytes)"),
+  // Event ingestion limits
+  EVENT_MAX_BYTES: z.coerce.number().int().positive().max(1_048_576).default(262_144),
+  EVENT_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(300),
+  // Rejected API keys per IP per 15 minutes
+  INGEST_AUTH_FAILURE_LIMIT: z.coerce.number().int().positive().default(50),
   // Comma-separated host:port values exempt from SSRF checks, for local test receivers
   SSRF_ALLOWED_PRIVATE_HOSTS: z
     .string()

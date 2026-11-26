@@ -8,20 +8,9 @@
 
 // ─── Enums ───────────────────────────────────────────────────────────────────
 
-export enum DeliveryStatus {
-  PENDING = "PENDING",
-  PROCESSING = "PROCESSING",
-  RETRYING = "RETRYING",
-  SUCCEEDED = "SUCCEEDED",
-  FAILED = "FAILED",
-}
+export type DeliveryStatus = "PENDING" | "PROCESSING" | "RETRYING" | "SUCCEEDED" | "FAILED";
 
-export enum DeliveryOutcome {
-  SUCCESS = "SUCCESS",
-  HTTP_ERROR = "HTTP_ERROR",
-  NETWORK_ERROR = "NETWORK_ERROR",
-  TIMEOUT = "TIMEOUT",
-}
+export type DeliveryOutcome = "SUCCESS" | "HTTP_ERROR" | "NETWORK_ERROR" | "TIMEOUT";
 
 // ─── Domain types ─────────────────────────────────────────────────────────────
 
@@ -118,13 +107,43 @@ export type ApiResponse<T> = ApiSuccess<T> | ApiError;
 
 // ─── Event ingestion ─────────────────────────────────────────────────────────
 
-/** Shape returned by POST /api/v1/events */
+/** Shape returned (202) by POST /api/v1/events, including idempotent replays */
 export interface IngestEventResponse {
-  eventId: string;
+  id: string;
   type: string;
-  status: "accepted" | "duplicate";
+  status: "accepted";
   deliveriesCreated: number;
-  timestamp: string;
+  createdAt: string;
+}
+
+/** List item: the payload is only returned by the detail view */
+export interface EventSummaryDto {
+  id: string;
+  type: string;
+  idempotencyKey: string | null;
+  createdAt: string;
+  deliveryCount: number;
+}
+
+export interface EventDeliveryDto {
+  id: string;
+  endpointId: string;
+  endpointName: string;
+  endpointDeleted: boolean;
+  status: DeliveryStatus;
+  attemptCount: number;
+  lastStatusCode: number | null;
+  createdAt: string;
+}
+
+export interface EventDetailDto extends EventDto {
+  deliveries: EventDeliveryDto[];
+}
+
+export interface Page<T> {
+  items: T[];
+  /** Pass as `cursor` to fetch the next page; null on the last page */
+  nextCursor: string | null;
 }
 
 // ─── Analytics ───────────────────────────────────────────────────────────────
