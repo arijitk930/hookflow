@@ -7,6 +7,8 @@ import type { ApiError } from "@hookflow/shared";
 import { config } from "./config.js";
 import { healthRouter } from "./routes/health.js";
 import { createAuthRouter } from "./routes/auth.js";
+import { apiKeysRouter } from "./routes/apiKeys.js";
+import { requireTrustedOrigin } from "./middleware/requireTrustedOrigin.js";
 import { notFoundHandler } from "./middleware/notFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 
@@ -21,6 +23,8 @@ export function createApp(options: AppOptions = {}): Express {
   app.use(helmet());
   // Only the dashboard may call the API with cookies
   app.use(cors({ origin: config.WEB_ORIGIN, credentials: true }));
+  // CSRF: reject state-changing browser requests from other origins
+  app.use(requireTrustedOrigin(config.WEB_ORIGIN));
   app.use(express.json({ limit: "1mb" }));
   app.use(cookieParser());
 
@@ -41,6 +45,7 @@ export function createApp(options: AppOptions = {}): Express {
   // API v1 routes
   app.use("/api/v1/health", healthRouter);
   app.use("/api/v1/auth", createAuthRouter(authRateLimiter));
+  app.use("/api/v1/api-keys", apiKeysRouter);
 
   // 404 & Error handlers
   app.use(notFoundHandler);

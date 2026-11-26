@@ -46,10 +46,8 @@ healthRouter.get("/", async (_req, res) => {
     console.error("Health check - Storage error:", err);
   }
 
-  const isHealthy =
-    dbStatus === "connected" &&
-    redisStatus === "connected" &&
-    storageStatus === "connected";
+  // Storage is reported but not required: no feature depends on it yet
+  const isHealthy = dbStatus === "connected" && redisStatus === "connected";
   const statusCode = isHealthy ? 200 : 503;
 
   const response: ApiSuccess<HealthData> = {

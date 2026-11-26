@@ -68,7 +68,8 @@ model ApiKey {
   name       String
   /// Short prefix shown in the UI so the user can identify the key (e.g. "hf_live_abc1")
   prefix     String
-  /// bcrypt hash of the full raw key; used for constant-time verification
+  /// SHA-256 hex of the full raw key. Keys are 256-bit random, so a fast unsalted hash is
+  /// safe and lets ingestion look the key up through this unique index in one query.
   keyHash    String    @unique
   lastUsedAt DateTime?
   revokedAt  DateTime?
@@ -93,6 +94,9 @@ model Endpoint {
   isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+  /// Soft delete: set instead of removing the row, so delivery history survives.
+  /// Every endpoint query (API and worker) must filter on `deletedAt: null`.
+  deletedAt  DateTime?
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -143,7 +147,10 @@ model Delivery {
   eventId    String
   endpointId String
   event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  endpoint   Endpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  /// Blocks hard-deleting an endpoint that has history. The constraint is DEFERRABLE
+  /// INITIALLY DEFERRED (migration `defer_delivery_endpoint_fk`; not expressible here),
+  /// so it is checked at commit and deleting a whole user still cascades.
+  endpoint   Endpoint @relation(fields: [endpointId], references: [id], onDelete: NoAction)
 
   attempts DeliveryAttempt[]
 

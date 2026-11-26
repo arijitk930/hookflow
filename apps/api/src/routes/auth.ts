@@ -16,7 +16,7 @@ import { requireAuth } from "../middleware/requireAuth.js";
 
 const credentialsSchema = z.object({
   email: z.string().trim().toLowerCase().email("Must be a valid email").max(254),
-  // Upper bound keeps scrypt cost bounded for oversized inputs
+  // Upper bound keeps hashing cost bounded for oversized inputs
   password: z.string().min(8, "Must be at least 8 characters").max(128),
 });
 

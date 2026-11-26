@@ -14,6 +14,12 @@ export class AppError extends Error {
   }
 }
 
+function isBodyParserError(err: unknown): err is { status: number; type: string } {
+  if (typeof err !== "object" || err === null) return false;
+  const { status, type } = err as { status?: unknown; type?: unknown };
+  return typeof type === "string" && typeof status === "number" && status >= 400 && status < 500;
+}
+
 export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   if (err instanceof ZodError) {
     const details: Record<string, string[]> = {};
@@ -58,6 +64,20 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
       },
     };
     res.status(400).json(payload);
+    return;
+  }
+
+  // Other body-parser client errors carry a 4xx status and a `type`
+  if (isBodyParserError(err)) {
+    const tooLarge = err.type === "entity.too.large";
+    const payload: ApiError = {
+      ok: false,
+      error: {
+        code: tooLarge ? "PAYLOAD_TOO_LARGE" : "BAD_REQUEST",
+        message: tooLarge ? "Request body is too large" : "Request body could not be read",
+      },
+    };
+    res.status(err.status).json(payload);
     return;
   }
 

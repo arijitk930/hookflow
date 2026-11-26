@@ -1,9 +1,9 @@
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, afterAll, vi } from "vitest";
 import request from "supertest";
 import { app } from "../app.js";
 import { prisma } from "@hookflow/db";
 import { closeRedisClient } from "../redis.js";
-import { closeStorageClient } from "../storage.js";
+import { closeStorageClient, getStorageClient } from "../storage.js";
 
 describe("Health Route & API foundation", () => {
   afterAll(async () => {
@@ -23,6 +23,19 @@ describe("Health Route & API foundation", () => {
     expect(res.body.data.services.storage).toBe("connected");
     expect(typeof res.body.data.uptime).toBe("number");
     expect(typeof res.body.data.timestamp).toBe("string");
+  });
+
+  it("stays healthy when only object storage is down", async () => {
+    const send = vi
+      .spyOn(getStorageClient(), "send")
+      .mockImplementationOnce(() => Promise.reject(new Error("storage down")));
+
+    const res = await request(app).get("/api/v1/health");
+    send.mockRestore();
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe("healthy");
+    expect(res.body.data.services.storage).toBe("disconnected");
   });
 
   it("GET /api/v1/unknown-route returns 404 with structured ApiError", async () => {

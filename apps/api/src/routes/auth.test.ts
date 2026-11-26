@@ -56,7 +56,7 @@ describe("Auth API", () => {
       expect(cookie).toMatch(/Path=\//);
 
       const user = await prisma.user.findUniqueOrThrow({ where: { email } });
-      expect(user.passwordHash).toMatch(/^scrypt\$/);
+      expect(user.passwordHash).toMatch(/^\$argon2id\$/);
       expect(user.passwordHash).not.toContain(PASSWORD);
 
       // Only the token hash is persisted, never the raw cookie value

@@ -21,7 +21,12 @@ const envSchema = z.object({
   STORAGE_BUCKET: z.string().default("uploads"),
   REDIS_URL: z.string().default("redis://localhost:6380"),
   // Dashboard origin allowed to call the API with credentials (cookies)
-  WEB_ORIGIN: z.string().url().default("http://localhost:3001"),
+  // Normalised to scheme://host[:port], the form browsers send in the Origin header
+  WEB_ORIGIN: z
+    .string()
+    .url()
+    .default("http://localhost:3001")
+    .transform((value) => new URL(value).origin),
   // Max register/login attempts per IP per 15 minutes
   AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(20),
   JWT_SECRET: z.string().min(16, "JWT_SECRET should be at least 16 chars"),

@@ -16,6 +16,7 @@
     "@aws-sdk/client-s3": "^3.1177.0",
     "@hookflow/db": "workspace:*",
     "@hookflow/shared": "workspace:*",
+    "@node-rs/argon2": "^2.2.2",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^18.0.9",
