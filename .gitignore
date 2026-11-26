@@ -1,0 +1,12 @@
+node_modules
+.next
+dist
+coverage
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+
+# Prisma 7 generated client (regenerate with: pnpm --filter @hookflow/db db:generate)
+packages/db/prisma/generated/
+.neon

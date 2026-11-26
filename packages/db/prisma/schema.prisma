@@ -1,0 +1,176 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// HookFlow — Prisma Schema
+// ─────────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client"
+  output   = "./generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  // url is configured in prisma.config.ts (Prisma 7+)
+}
+
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum DeliveryStatus {
+  PENDING
+  PROCESSING
+  RETRYING
+  SUCCEEDED
+  FAILED
+}
+
+enum DeliveryOutcome {
+  SUCCESS
+  HTTP_ERROR
+  NETWORK_ERROR
+  TIMEOUT
+}
+
+// ─── Models ──────────────────────────────────────────────────────────────────
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  sessions  Session[]
+  apiKeys   ApiKey[]
+  endpoints Endpoint[]
+  events    Event[]
+}
+
+/// Dashboard login session. The browser holds a random token in an HTTP-only cookie;
+/// only its SHA-256 hash is stored, so a database leak cannot be replayed as a login.
+/// Deleting the row revokes the session immediately (logout).
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/// API keys are used to authenticate inbound event ingestion requests.
+/// Raw keys are never stored — only the prefix (for display) and hash (for verification).
+model ApiKey {
+  id         String    @id @default(cuid())
+  name       String
+  /// Short prefix shown in the UI so the user can identify the key (e.g. "hf_live_abc1")
+  prefix     String
+  /// bcrypt hash of the full raw key; used for constant-time verification
+  keyHash    String    @unique
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// Endpoint represents a downstream receiver that HookFlow delivers webhooks to.
+model Endpoint {
+  id        String   @id @default(cuid())
+  name      String
+  url       String
+  /// Array of event type strings this endpoint subscribes to, e.g. ["order.created", "payment.succeeded"]
+  /// Empty array means subscribe to all event types.
+  eventTypes String[]
+  /// AES-256-GCM encrypted signing secret; decrypted by worker at delivery time using ENCRYPTION_KEY env var.
+  signingSecretEncrypted String
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  deliveries Delivery[]
+
+  @@index([userId])
+}
+
+/// Represents a single inbound event submitted by an API key holder.
+model Event {
+  id             String   @id @default(cuid())
+  type           String
+  /// Raw JSON payload as submitted by the caller
+  payload        Json
+  /// Optional caller-supplied idempotency key; unique per user to prevent duplicate processing.
+  idempotencyKey String?
+  createdAt      DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  deliveries Delivery[]
+
+  /// Prevents duplicate event creation when the caller retries with the same idempotency key.
+  @@unique([userId, idempotencyKey])
+  @@index([userId, createdAt])
+  @@index([userId, type, createdAt])
+}
+
+/// Delivery tracks the end-to-end state of delivering one Event to one Endpoint.
+/// Created before the job is enqueued. A recovery job re-enqueues PENDING rows
+/// that were never picked up (e.g. due to a crash between DB write and Redis enqueue).
+model Delivery {
+  id            String         @id @default(cuid())
+  status        DeliveryStatus @default(PENDING)
+  attemptCount  Int            @default(0)
+  /// Maximum number of attempts before the delivery is marked FAILED.
+  maxAttempts   Int            @default(5)
+  /// Wall-clock time after which the next attempt may be scheduled.
+  nextAttemptAt DateTime?
+  lastStatusCode Int?
+  lastError     String?
+  succeededAt   DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  eventId    String
+  endpointId String
+  event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  endpoint   Endpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  attempts DeliveryAttempt[]
+
+  /// One delivery row per (event, endpoint) pair; prevents double-scheduling.
+  @@unique([eventId, endpointId])
+  /// Used by the worker and recovery job to find deliveries ready for processing.
+  @@index([status, nextAttemptAt])
+  @@index([endpointId, createdAt])
+}
+
+/// DeliveryAttempt is an immutable record of a single HTTP request attempt.
+model DeliveryAttempt {
+  id            String          @id @default(cuid())
+  attemptNumber Int
+  outcome       DeliveryOutcome
+  statusCode    Int?
+  /// Duration of the HTTP request in milliseconds
+  durationMs    Int
+  /// Captured response body, truncated to a safe max length
+  responseBody  String?
+  errorMessage  String?
+  startedAt     DateTime
+  completedAt   DateTime
+
+  deliveryId String
+  delivery   Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+
+  @@unique([deliveryId, attemptNumber])
+  @@index([deliveryId, startedAt])
+}
