@@ -87,7 +87,7 @@ model Endpoint {
   name      String
   url       String
   /// Array of event type strings this endpoint subscribes to, e.g. ["order.created", "payment.succeeded"]
-  /// Empty array means subscribe to all event types.
+  /// The API requires at least one; there is no implicit "all events" subscription.
   eventTypes String[]
   /// AES-256-GCM encrypted signing secret; decrypted by worker at delivery time using ENCRYPTION_KEY env var.
   signingSecretEncrypted String

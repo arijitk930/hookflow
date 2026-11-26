@@ -31,7 +31,15 @@ const envSchema = z.object({
   AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(20),
   JWT_SECRET: z.string().min(16, "JWT_SECRET should be at least 16 chars"),
   SESSION_SECRET: z.string().min(16, "SESSION_SECRET should be at least 16 chars"),
-  ENCRYPTION_KEY: z.string().min(16, "ENCRYPTION_KEY should be at least 16 chars"),
+  // AES-256 key for endpoint signing secrets
+  ENCRYPTION_KEY: z
+    .string()
+    .regex(/^[0-9a-fA-F]{64}$/, "ENCRYPTION_KEY must be 64 hex characters (32 bytes)"),
+  // Comma-separated host:port values exempt from SSRF checks, for local test receivers
+  SSRF_ALLOWED_PRIVATE_HOSTS: z
+    .string()
+    .default("")
+    .transform((v) => v.split(",").map((h) => h.trim().toLowerCase()).filter(Boolean)),
   WEBHOOK_TIMEOUT_MS: z.coerce.number().default(10000),
   WEBHOOK_MAX_RESPONSE_BYTES: z.coerce.number().default(65536),
 });
@@ -44,6 +52,10 @@ const parsed = envSchema.safeParse({
 if (!parsed.success) {
   console.error("❌ Invalid environment variables:", parsed.error.format());
   throw new Error("Invalid environment configuration");
+}
+
+if (parsed.data.NODE_ENV === "production" && parsed.data.SSRF_ALLOWED_PRIVATE_HOSTS.length > 0) {
+  throw new Error("SSRF_ALLOWED_PRIVATE_HOSTS must be empty in production");
 }
 
 export const config = parsed.data;

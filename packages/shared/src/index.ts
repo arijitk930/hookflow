@@ -56,6 +56,11 @@ export interface EndpointDto {
   updatedAt: string;
 }
 
+/** Returned on create and secret rotation only; the secret is never returned again */
+export interface EndpointWithSecretDto extends EndpointDto {
+  signingSecret: string;
+}
+
 export interface EventDto {
   id: string;
   type: string;

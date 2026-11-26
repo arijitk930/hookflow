@@ -18,6 +18,11 @@ export function generateApiKey(): { rawKey: string; displayPrefix: string } {
   return { rawKey, displayPrefix: rawKey.slice(0, API_KEY_PREFIX.length + 4) };
 }
 
+/** Secret a receiver uses to verify webhook signatures. Stored encrypted, not hashed. */
+export function generateSigningSecret(): string {
+  return "whsec_" + generateToken();
+}
+
 /**
  * SHA-256 of a high-entropy token (session tokens, API keys).
  * A fast hash is safe here because the input is random, not a guessable password,

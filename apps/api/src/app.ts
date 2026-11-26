@@ -8,6 +8,8 @@ import { config } from "./config.js";
 import { healthRouter } from "./routes/health.js";
 import { createAuthRouter } from "./routes/auth.js";
 import { apiKeysRouter } from "./routes/apiKeys.js";
+import { createEndpointsRouter } from "./routes/endpoints.js";
+import type { Resolver } from "./lib/ssrf.js";
 import { requireTrustedOrigin } from "./middleware/requireTrustedOrigin.js";
 import { notFoundHandler } from "./middleware/notFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
@@ -15,6 +17,8 @@ import { errorHandler } from "./middleware/errorHandler.js";
 export interface AppOptions {
   /** Override AUTH_RATE_LIMIT_MAX (used by tests). */
   authRateLimitMax?: number;
+  /** Override DNS resolution for endpoint URL checks (used by tests). */
+  resolveHost?: Resolver;
 }
 
 export function createApp(options: AppOptions = {}): Express {
@@ -46,6 +50,14 @@ export function createApp(options: AppOptions = {}): Express {
   app.use("/api/v1/health", healthRouter);
   app.use("/api/v1/auth", createAuthRouter(authRateLimiter));
   app.use("/api/v1/api-keys", apiKeysRouter);
+  app.use(
+    "/api/v1/endpoints",
+    createEndpointsRouter({
+      allowHttp: config.NODE_ENV !== "production",
+      allowedPrivateHosts: config.SSRF_ALLOWED_PRIVATE_HOSTS,
+      resolve: options.resolveHost,
+    })
+  );
 
   // 404 & Error handlers
   app.use(notFoundHandler);
